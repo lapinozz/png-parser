@@ -18,15 +18,11 @@ int main()
 	sf::Texture textureRef;
 	sf::Sprite spriteRef(textureRef);
 
-	sf::Texture textureDiff;
-	sf::Sprite spriteDiff(textureDiff);
-
-	const auto path = testFolder + "/basi6a16.png";
 	for (const auto& entry : std::filesystem::directory_iterator(testFolder))
 	{
 		const auto path = entry.path().string();
 
-		std::println("testing: {} ", entry.path().filename().string());
+		std::println("testing file: {} ", entry.path().filename().string());
 
 		std::ifstream fileStream(path, std::ios_base::binary);
 
@@ -42,7 +38,7 @@ int main()
 		{
 			if (imageOpt)
 			{
-				std::cout << "not the same" << std::endl;
+				std::cout << "TEST FAILED" << std::endl;
 				break;
 			}
 			else
@@ -53,17 +49,22 @@ int main()
 
 		if (!imageOpt && (ref.getSize().x != 0 || ref.getSize().y != 0))
 		{
-			std::cout << "not the same" << std::endl;
+			std::cout << "TEST FAILED" << std::endl;
 			break;
 		}
 
 		sf::Image image({ imageOpt->width, imageOpt->height }, imageOpt->data.data());
 
+		if (image.getSize() != ref.getSize())
+		{
+			std::cout << "TEST FAILED" << std::endl;
+		}
+
 		if (std::memcmp(image.getPixelsPtr(), ref.getPixelsPtr(), ref.getSize().x * ref.getSize().y * 4) != 0)
 		{
-			std::cout << "not the same" << std::endl;
+			std::cout << "TEST FAILED" << std::endl;
 
-			image.saveToFile(testFolder + "/out.png");
+			image.saveToFile(testFolder + "/../out.png");
 
 			texture = sf::Texture{ image };
 			sprite = sf::Sprite{ texture };
@@ -73,14 +74,16 @@ int main()
 
 			auto diffImage = ref;
 
-
 			break;
 		}
-
-		//image.saveToFile(testFolder + "/out.png");
 	}
 
-	auto window = sf::RenderWindow(sf::VideoMode({ 32, 32 }), "CMake SFML Project");
+	if (texture.getSize().x == 0)
+	{
+		return 0;
+	}
+
+	auto window = sf::RenderWindow(sf::VideoMode({ 32, 32 }), "Png Loader Tester");
 
 	while (window.isOpen())
 	{
@@ -92,11 +95,11 @@ int main()
 			}
 		}
 
-		window.clear(sf::Color::Yellow);
+		window.clear();
 
 		window.draw(sprite);
 
-		spriteRef.setPosition({ 40.f, 0.f });
+		spriteRef.setPosition({ sprite.getTexture().getSize().x  + 10.f, 0.f});
 		window.draw(spriteRef);
 
 		window.display();
