@@ -388,11 +388,9 @@ std::optional<Image> readPng(std::istream& stream)
 			}
 		}
 
-		const auto pPerB = std::min(width, 8 / depth);
-
-		auto* passByte = data.data();
-
 		int i{};
+		auto* passByte = data.data();
+		const auto pixelPerByte = std::min(width, 8 / depth);
 
 		auto row = startY;
 		while (row < pngInfo->height)
@@ -412,7 +410,7 @@ std::optional<Image> readPng(std::istream& stream)
 
 						*passByte <<= depth;
 
-						if (++i == pPerB)
+						if (++i == pixelPerByte)
 						{
 							i = 0;
 							passByte++;
@@ -447,11 +445,10 @@ std::optional<Image> readPng(std::istream& stream)
 
 		for (int pass{}; pass < 7; pass++)
 		{
-			const auto strideX = strideXTable[pass];
-			const auto strideY = strideYTable[pass];
-
 			const auto startX = startYTable[pass];
 			const auto startY = startXTable[pass];
+			const auto strideX = strideXTable[pass];
+			const auto strideY = strideYTable[pass];
 
 			const auto passWidth = (pngInfo->width - startX + strideX - 1) / strideX;
 			const auto passHeight = (pngInfo->height - startY + strideY - 1) / strideY;
