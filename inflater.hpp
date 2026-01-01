@@ -10,6 +10,7 @@
 #include <optional>
 #include <print>
 #include <format>
+#include <iostream>
 
 struct HuffmanCode
 {
@@ -436,7 +437,7 @@ std::optional<std::vector<std::uint8_t>> inflate(std::span<std::uint8_t> input)
 			const auto LEN = stream.readBits<uint16_t>(16);
 			const auto NLEN = stream.readBits<uint16_t>(16);
 
-			if (LEN != ~NLEN)
+			if (LEN != (uint16_t)~NLEN)
 			{
 				std::cerr << "invalid raw block length" << std::endl;
 				return std::nullopt;
