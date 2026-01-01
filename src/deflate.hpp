@@ -1,16 +1,14 @@
 #pragma once
 
-#include <string>
 #include <string_view>
 #include <vector>
 #include <span>
 #include <array>
-#include <bit>
-#include <spanstream>
 #include <optional>
-#include <print>
-#include <format>
 #include <iostream>
+
+namespace deflate
+{
 
 struct HuffmanCode
 {
@@ -56,8 +54,6 @@ struct HuffmanTable : public std::vector<HuffmanCode>
 			}
 
 			const auto code = nextCode[len]++;
-
-			//std::println("{} {} {:b}", (char)('A' + x), len, code);
 
 			decodeTable[code << (maxLength - len)] = { x, len };
 		}
@@ -380,9 +376,6 @@ static const HuffmanTable staticDistanceTable = []()
 
 std::optional<std::vector<std::uint8_t>> inflate(std::span<std::uint8_t> input)
 {
-	//std::vector<uint8_t> testDataDynamic{ 0x1d, 0xc6, 0x49, 0x01, 0x00, 0x00, 0x10, 0x40, 0xc0, 0xac, 0xa3, 0x7f, 0x88, 0x3d, 0x3c, 0x20, 0x2a, 0x97, 0x9d, 0x37, 0x5e ,0x1d ,0x0c, 0x00, 0x00, 0x00, 0x00 };
-	//std::vector<uint8_t> testDataStatic{ 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x57, 0xc8, 0x40, 0x27, 0xb9, 0x00 };
-
 	BitStream<std::uint8_t> stream{ input };
 
 	const auto CM = stream.readBits(4);
@@ -555,7 +548,7 @@ std::optional<std::vector<std::uint8_t>> inflate(std::span<std::uint8_t> input)
 		}
 	}
 
-	//std::println("{}", std::string_view((char*)outputData.data(), outputData.size()));
-
 	return outputData;
+} 
+
 }

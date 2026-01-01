@@ -1,8 +1,5 @@
-#include <SFML/Graphics.hpp>
+#include "deflate.hpp"
 
-#include "inflater.hpp"
-
-#include <fstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,6 +10,9 @@
 #include <optional>
 #include <print>
 #include <iostream>
+
+namespace png
+{
 
 using Uint8Stream = std::basic_istream<std::uint8_t, std::char_traits<std::uint8_t>>;
 
@@ -163,7 +163,14 @@ std::optional<PngInfo> readHeaderChunk(const PngChunk& chunk)
 	return info;
 }
 
-std::optional<sf::Image> readPng(std::istream& stream)
+struct Image
+{
+	std::uint32_t width{};
+	std::uint32_t height{};
+	std::vector<std::uint8_t> data;
+};
+
+std::optional<Image> readPng(std::istream& stream)
 {
 	constexpr static std::array<std::uint8_t, 8> pngSignature{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
@@ -247,7 +254,7 @@ std::optional<sf::Image> readPng(std::istream& stream)
 		}
 	}
 
-	auto decompressedDataOpt = inflate(compressedData);
+	auto decompressedDataOpt = deflate::inflate(compressedData);
 	if (!decompressedDataOpt)
 	{
 		return std::nullopt;
@@ -572,110 +579,11 @@ std::optional<sf::Image> readPng(std::istream& stream)
 				in += 4;
 			}
 		}
-		else if (pngInfo->colorType == 2 || pngInfo->colorType == 6)
-		{
-		}
 	}
 
+	imageData.resize(pngInfo->width* pngInfo->height);
 
-	sf::Image image({ pngInfo->width, pngInfo->height }, imageData.data());
-
-	return image;
+	return Image{ pngInfo->width, pngInfo->height, std::move(imageData) };
 }
 
-int main()
-{
-	std::string testFolder = TEST_FILES_DIR;
-
-	sf::Texture texture;
-	sf::Sprite sprite(texture);
-
-	sf::Texture textureRef;
-	sf::Sprite spriteRef(textureRef);
-
-	sf::Texture textureDiff;
-	sf::Sprite spriteDiff(textureDiff);
-
-	const auto path = testFolder + "/basi6a16.png";
-	for (const auto& entry : std::filesystem::directory_iterator(testFolder))
-	{
-		const auto path = entry.path().string();
-
-		std::println("testing: {} ", entry.path().filename().string());
-
-		std::ifstream fileStream(path, std::ios_base::binary);
-
-		auto imageOpt = readPng(fileStream);
-
-		sf::Image ref;
-
-		try
-		{
-			ref = sf::Image(path);
-		}
-		catch (std::exception e)
-		{
-			if (imageOpt)
-			{
-				std::cout << "not the same" << std::endl;
-				break;
-			}
-			else
-			{
-				continue;
-			}
-		}
-
-		if (!imageOpt && (ref.getSize().x != 0 || ref.getSize().y != 0))
-		{
-			std::cout << "not the same" << std::endl;
-			break;
-		}
-
-		auto& image = *imageOpt;
-
-		if (std::memcmp(image.getPixelsPtr(), ref.getPixelsPtr(), ref.getSize().x * ref.getSize().y * 4) != 0)
-		{
-			std::cout << "not the same" << std::endl;
-
-			image.saveToFile(testFolder + "/out.png");
-
-			texture = sf::Texture{ image };
-			sprite = sf::Sprite{ texture };
-
-			textureRef = sf::Texture{ ref };
-			spriteRef = sf::Sprite{ textureRef };
-
-			auto diffImage = ref;
-
-
-			break;
-		}
-
-		//image.saveToFile(testFolder + "/out.png");
-	}
-
-	auto window = sf::RenderWindow(sf::VideoMode({32, 32}), "CMake SFML Project");
-
-	while (window.isOpen())
-	{
-		while (const std::optional event = window.pollEvent())
-		{
-			if (event->is<sf::Event::Closed>())
-			{
-				window.close();
-			}
-		}
-
-		window.clear(sf::Color::Yellow);
-
-		window.draw(sprite);
-
-		spriteRef.setPosition({ 40.f, 0.f });
-		window.draw(spriteRef);
-
-		window.display();
-	}
-
-	return 0;
 }

@@ -13,7 +13,7 @@ FetchContent_MakeAvailable(SFML)
 project ("png-parser")
 
 # Add source to this project's executable.
-add_executable (png-parser png-parser.cpp)
+add_executable (png-parser "main.cpp")
 
 target_link_libraries(png-parser PRIVATE SFML::Graphics)
 
