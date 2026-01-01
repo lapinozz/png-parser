@@ -182,8 +182,6 @@ std::optional<sf::Image> readPng(std::istream& stream)
 		chunks.emplace_back(readChunk(stream));
 
 		auto& chunk = chunks.back();
-				
-		std::cout << "length: " << chunk.length << " type: " << chunk.type.toStr() << std::endl;
 
 		if (chunk.type == "IEND")
 		{
@@ -203,8 +201,6 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	{
 		return std::nullopt;
 	}
-
-	std::println("size: {}x{}", pngInfo->width, pngInfo->height);
 
 	std::array<uint8_t, 256> paletteR{};
 	std::array<uint8_t, 256> paletteG{};
@@ -259,13 +255,6 @@ std::optional<sf::Image> readPng(std::istream& stream)
 
 	auto& decompressedData = *decompressedDataOpt;
 
-	int starting_row[7] = { 0, 0, 4, 0, 2, 0, 1 };
-	int starting_col[7] = { 0, 4, 0, 2, 0, 1, 0 };
-	int row_increment[7] = { 8, 8, 8, 4, 4, 2, 2 };
-	int col_increment[7] = { 8, 8, 4, 4, 2, 2, 1 };
-	int block_height[7] = { 8, 8, 4, 4, 2, 2, 1 };
-	int block_width[7] = { 8, 4, 4, 2, 2, 1, 1 };
-
 	int channels = 1;
 	if (pngInfo->colorType == 2)
 	{
@@ -282,18 +271,13 @@ std::optional<sf::Image> readPng(std::istream& stream)
 
 	const auto depth = pngInfo->depth;
 
-	std::println("interlace: {} depth: {} channels: {}", pngInfo->interlace, depth, channels);
-	std::println("colorType: {}", pngInfo->colorType);
-
 	const auto bytePerChannel = depth == 16 ? 2 : 1;
+	const auto bytePerPixel = channels * bytePerChannel;
+	const auto lineByteWidth = pngInfo->width * bytePerPixel;
 
-	const auto bpp = (int)std::ceil(channels * depth / 8.f);
-	const auto lineByteWidth = pngInfo->width * bpp;
+	const auto outputByteLength = pngInfo->width * pngInfo->height * 4;
 
-	const auto outputSize = pngInfo->width * pngInfo->height * 4;
-
-	std::vector<uint8_t> imageData(std::max(outputSize, lineByteWidth * pngInfo->height));
-	auto* data = imageData.data();
+	std::vector<uint8_t> imageData(std::max(outputByteLength, lineByteWidth * pngInfo->height));
 
 	static constexpr uint8_t scaleTable[]{ 0, 0xff, 0x55, 0, 0x11, 0, 0, 0, 0x01 };
 	const auto scale = pngInfo->colorType == 3 ? 1 : scaleTable[depth];
@@ -308,7 +292,14 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	{
 		if (depth < 8)
 		{
-			return std::ceil((channels * depth * width) / 8.f);
+			// return std::ceil((channels * depth * width) / 8.f);
+
+			std::uint16_t v = (channels * depth * width);
+			bool b = v & 0b111;
+			v >>= 3;
+			v += b || (v == 0);
+
+			return v;
 		}
 		
 		return channels * width * bytePerChannel;
@@ -322,9 +313,9 @@ std::optional<sf::Image> readPng(std::istream& stream)
 		std::uint8_t b = 0;
 		std::uint8_t c = 0;
 
-		if (x >= bpp)
+		if (x >= bytePerPixel)
 		{
-			a = data[x - bpp + y * lineWidth];
+			a = data[x - bytePerPixel + y * lineWidth];
 		}
 
 		if (y >= 1)
@@ -332,9 +323,9 @@ std::optional<sf::Image> readPng(std::istream& stream)
 			b = data[x + (y - 1) * lineWidth];
 		}
 
-		if (x >= bpp && y >= 1)
+		if (x >= bytePerPixel && y >= 1)
 		{
-			c = data[x - bpp + (y - 1) * lineWidth];
+			c = data[x - bytePerPixel + (y - 1) * lineWidth];
 		}
 
 		if (filter == 1)
@@ -384,36 +375,15 @@ std::optional<sf::Image> readPng(std::istream& stream)
 		{
 			const auto filter = nextByte();
 
-			std::println("filter: {}", +filter);
-
 			for (int x = 0; x < byteWidth; x++)
 			{
 				unfilter(data, filter, x, y, byteWidth);
 			}
 		}
 
-		//auto pPerB = std::min<int>(width - 1, 8 / depth - 1);
-		auto pPerB = std::min<int>(width, 8 / depth);
-
-		/*
-		int firstBit = 7;
-		for (; firstBit >= 0; firstBit--)
-		{
-			if (pPerB & (1 << firstBit))
-			{
-				break;
-			}
-		}
-
-		for (; firstBit >= 0; firstBit--)
-		{
-			pPerB |= 1 << firstBit;
-		}
-		*/
+		const auto pPerB = std::min(width, 8 / depth);
 
 		auto* passByte = data.data();
-
-		std::println("pPerB {} ", pPerB);
 
 		int i{};
 
@@ -423,17 +393,15 @@ std::optional<sf::Image> readPng(std::istream& stream)
 			auto col = startX;
 			while (col < pngInfo->width)
 			{
-				for (int x = 0; x < channels * bytePerChannel; x++)
+				for (int x = 0; x < bytePerPixel; x++)
 				{
 					if (depth >= 8)
 					{
-						imageData[col * bpp + row * lineByteWidth + x] = *(passByte++);
+						imageData[col * bytePerPixel + row * lineByteWidth + x] = *(passByte++);
 					}
 					else
 					{
-						imageData[col * bpp + row * lineByteWidth + x] = scale * (*passByte >> (8 - depth));
-
-						//std::println("write {}", i);
+						imageData[col * bytePerPixel + row * lineByteWidth + x] = scale * (*passByte >> (8 - depth));
 
 						*passByte <<= depth;
 
@@ -441,7 +409,6 @@ std::optional<sf::Image> readPng(std::istream& stream)
 						{
 							i = 0;
 							passByte++;
-							//std::println("inc");
 						}
 					}
 				}
@@ -466,29 +433,34 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	}
 	else
 	{
+		static constexpr std::array<int, 7> startXTable = { 0, 0, 4, 0, 2, 0, 1 };
+		static constexpr std::array<int, 7> startYTable = { 0, 4, 0, 2, 0, 1, 0 };
+		static constexpr std::array<int, 7> strideYTable = { 8, 8, 8, 4, 4, 2, 2 };
+		static constexpr std::array<int, 7> strideXTable = { 8, 8, 4, 4, 2, 2, 1 };
+
 		for (int pass{}; pass < 7; pass++)
 		{
-			const auto strideX = col_increment[pass];
-			const auto strideY = row_increment[pass];
+			const auto strideX = strideXTable[pass];
+			const auto strideY = strideYTable[pass];
 
-			const auto passX = (pngInfo->width - starting_col[pass] + strideX - 1) / strideX;
-			const auto passY = (pngInfo->height - starting_row[pass] + strideY - 1) / strideY;
+			const auto startX = startYTable[pass];
+			const auto startY = startXTable[pass];
 
-			if (!passX || !passY)
+			const auto passWidth = (pngInfo->width - startX + strideX - 1) / strideX;
+			const auto passHeight = (pngInfo->height - startY + strideY - 1) / strideY;
+
+			if (!passWidth || !passHeight)
 			{
 				continue;
 			}
 
-			const auto passSizeX = rawImageWidth(passX);
-			const auto passSize = passSizeX * passY;
-
-			std::println("pass: {} passX: {} passY {} passSizeX {}", pass, passX, passY, passSizeX);
-			std::println("startX: {} startY: {} strideX {} strideY {}", starting_col[pass], starting_row[pass], strideX, strideY);
+			const auto passByteWidth = rawImageWidth(passWidth);
+			const auto passSize = passByteWidth * passHeight;
 
 			std::vector<uint8_t> passData;
 			passData.resize(passSize);
 
-			readRawImage(passData, passX, passY, starting_col[pass], starting_row[pass], strideX, strideY);
+			readRawImage(passData, passWidth, passHeight, startX, startY, strideX, strideY);
 		}
 	}
 
@@ -496,7 +468,7 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	{
 		for (int x = 0; x < pngInfo->width * pngInfo->height * channels; x++)
 		{
-			data[x] = ((uint16_t*)data)[x] & 0xFF;
+			imageData[x] = ((uint16_t*)imageData.data())[x] & 0xFF;
 		}
 	}
 
@@ -518,55 +490,30 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	}
 	else if (channels < 4)
 	{
-		if (channels == 1)
+		auto out = imageData.data() + pngInfo->width * pngInfo->height * 4;
+		auto in = imageData.data() + pngInfo->width * pngInfo->height * channels;
+
+		for (int x = 0; x < pngInfo->width * pngInfo->height; x++)
 		{
-			auto out = imageData.data() + pngInfo->width * pngInfo->height * 4;
-			auto in = imageData.data() + pngInfo->width * pngInfo->height * channels;
+			out -= 4;
+			in -= channels;
 
-			for (int x = 0; x < pngInfo->width * pngInfo->height; x++)
+			if (channels == 1)
 			{
-				in--;
-				out -= 4;
-
-				const auto byte = *in;
-
 				out[3] = 0xff;
-				out[2] = byte;
-				out[1] = byte;
-				out[0] = byte;
+				out[2] = *in;
+				out[1] = *in;
+				out[0] = *in;
 			}
-		}
-		else if (channels == 2)
-		{
-			auto out = imageData.data() + pngInfo->width * pngInfo->height * 4;
-			auto in = imageData.data() + pngInfo->width * pngInfo->height * channels;
-
-			for (int x = 0; x < pngInfo->width * pngInfo->height; x++)
+			else if (channels == 2)
 			{
-				in -= 2;
-				out -= 4;
-
-				const auto color = in[0];
-				const auto alpha = in[1];
-
-				out[3] = alpha;
-				out[2] = color;
-				out[1] = color;
-				out[0] = color;
+				out[3] = in[1];
+				out[2] = in[0];
+				out[1] = in[0];
+				out[0] = in[0];
 			}
-		}
-		else if (channels == 3)
-		{
-			auto out = imageData.data() + pngInfo->width * pngInfo->height * 4;
-			auto in = imageData.data() + pngInfo->width * pngInfo->height * channels;
-
-			for (int x = 0; x < pngInfo->width * pngInfo->height; x++)
+			else if (channels == 3)
 			{
-				in -= 3;
-				out -= 4;
-
-				const auto byte = *in;
-
 				out[3] = 0xff;
 				out[2] = in[2];
 				out[1] = in[1];
@@ -631,7 +578,7 @@ std::optional<sf::Image> readPng(std::istream& stream)
 	}
 
 
-	sf::Image image({ pngInfo->width, pngInfo->height }, data);
+	sf::Image image({ pngInfo->width, pngInfo->height }, imageData.data());
 
 	return image;
 }
